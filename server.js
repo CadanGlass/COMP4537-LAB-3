@@ -8,16 +8,48 @@ const { getDate } = require("./modules/utils");
 // Load language file
 const lang = require("./locals/en.json");
 
-// Create the server
-const server = http.createServer((req, res) => {
-  const parsedUrl = url.parse(req.url, true);
-  const pathname = parsedUrl.pathname;
-  const query = parsedUrl.query;
+// Request handler class
+class RequestHandler {
+  constructor() {
+    this.basePath = path.join(__dirname);
+  }
 
-  // Set response header
-  res.setHeader("Content-Type", "text/html");
+  handleRequest(req, res) {
+    const parsedUrl = url.parse(req.url, true);
+    const pathname = parsedUrl.pathname;
+    const query = parsedUrl.query;
 
-  if (pathname === "/COMP4537/labs/3/getDate") {
+    // Set response header
+    res.setHeader("Content-Type", "text/html");
+
+    if (pathname === "/") {
+      // Serve home page
+      this.handleHomePage(res);
+    } else if (pathname === "/COMP4537/labs/3/getDate") {
+      this.handleGetDate(query, res);
+    } else if (pathname === "/COMP4537/labs/3/writeFile") {
+      this.handleWriteFile(query, res);
+    } else if (pathname.startsWith("/COMP4537/labs/3/readFile")) {
+      this.handleReadFile(pathname, res);
+    } else {
+      this.handleNotFound(res);
+    }
+  }
+
+  handleHomePage(res) {
+    const filePath = path.join(this.basePath, "public", "index.html");
+    fs.readFile(filePath, "utf8", (err, data) => {
+      if (err) {
+        res.statusCode = 500;
+        res.end('<div style="color: red;">Error loading home page.</div>');
+      } else {
+        res.statusCode = 200;
+        res.end(data);
+      }
+    });
+  }
+
+  handleGetDate(query, res) {
     const name = query.name;
     if (!name) {
       res.statusCode = 400;
@@ -28,13 +60,15 @@ const server = http.createServer((req, res) => {
       res.statusCode = 200;
       res.end(message);
     }
-  } else if (pathname === "/COMP4537/labs/3/writeFile") {
+  }
+
+  handleWriteFile(query, res) {
     const text = query.text;
     if (!text) {
       res.statusCode = 400;
       res.end('<div style="color: red;">Text parameter is required.</div>');
     } else {
-      const filePath = path.join(__dirname, "file.txt");
+      const filePath = path.join(this.basePath, "file.txt");
       fs.appendFile(filePath, `${text}\n`, (err) => {
         if (err) {
           res.statusCode = 500;
@@ -45,9 +79,11 @@ const server = http.createServer((req, res) => {
         }
       });
     }
-  } else if (pathname.startsWith("/COMP4537/labs/3/readFile")) {
+  }
+
+  handleReadFile(pathname, res) {
     const fileName = path.basename(pathname);
-    const filePath = path.join(__dirname, fileName);
+    const filePath = path.join(this.basePath, fileName);
 
     if (!fs.existsSync(filePath)) {
       res.statusCode = 404;
@@ -65,13 +101,32 @@ const server = http.createServer((req, res) => {
         }
       });
     }
-  } else {
+  }
+
+  handleNotFound(res) {
     res.statusCode = 404;
     res.end('<div style="color: red;">Error 404: Page not found.</div>');
   }
-});
+}
 
-// Start the server
-server.listen(3000, () => {
-  console.log("Server is running at http://localhost:3000");
-});
+// Server class
+class Server {
+  constructor(port) {
+    this.port = port;
+    this.requestHandler = new RequestHandler();
+  }
+
+  start() {
+    const server = http.createServer((req, res) => {
+      this.requestHandler.handleRequest(req, res);
+    });
+
+    server.listen(this.port, () => {
+      console.log(`Server is running at http://localhost:${this.port}`);
+    });
+  }
+}
+
+// Instantiate and start the server
+const server = new Server(3000);
+server.start();
